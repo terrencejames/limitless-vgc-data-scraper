@@ -5,26 +5,21 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
-
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
-
 const limitlessBaseUrl = 'https://play.limitlesstcg.com';
 // const limitlessTourneyEndpoint = 'tournament';
 // const limitlessMetagameEndpoint = 'metagame';
-const getLimitlessMetagameEndpoint = (tourneyId) => `https://play.limitlesstcg.com/tournament/${tourneyId}/metagame`
+const getLimitlessMetagameEndpoint = (tourneyId) => `https://play.limitlesstcg.com/tournament/${tourneyId}/metagame`;
+const getLimitlessPokemonMetagameEndpoint = (tourneyId, pokemonId) => `${getLimitlessMetagameEndpoint(tourneyId)}/${pokemonId}`; 
 
 const pokemonTestObj = {
     usageTotal: '18',
-    href: '/tournament/6850825127d8bc24cf2556aa/metagame/glimmora',
+    id: 'glimmora',
     name: 'Glimmora',
     usagePercent: '81.82%',
     winPercent: '53.40%'
 };
+
+const testTourneyId = "6850825127d8bc24cf2556aa";
 const sortObject = (obj) => {
     const clone = structuredClone(obj);
     return Object.fromEntries(Object.entries(clone).sort((a,b) => b[1] - a[1]));
@@ -38,7 +33,7 @@ const convertTotalsToPercent = (obj, total) => {
     return clone;
 }
 
-const getTournamentStats = async (tourneyId = '6850825127d8bc24cf2556aa') => {
+const getTournamentStats = async (tourneyId) => {
     const pokemonStats = {};
     try {
         const { data } = await axios.get(getLimitlessMetagameEndpoint(tourneyId));
@@ -60,7 +55,8 @@ const getTournamentStats = async (tourneyId = '6850825127d8bc24cf2556aa') => {
                 // Name/link
                 else if (_idx == 2) {
                     const anchor = $(el.children[0]);
-                    pokemonObj['href'] = anchor[0].attribs['href'];
+                    const href = anchor[0].attribs['href'];
+                    pokemonObj['id'] = href.split("/").pop();
                     pokemonKey = $(anchor[0].children[0]).text();
                     pokemonObj['name'] = pokemonKey;
                 } 
@@ -85,28 +81,37 @@ const getTournamentStats = async (tourneyId = '6850825127d8bc24cf2556aa') => {
         throw err;
     }
 }
-const getPlayerTeamlists = async (pokemonObj) => {
+const getPlayerTeamlists = async (tourneyId, pokemonId) => {
 	try {
-		const { data } = await axios.get(limitlessBaseUrl + pokemonObj.href);
+        const url = getLimitlessPokemonMetagameEndpoint(tourneyId, pokemonId);
+		const { data } = await axios.get(getLimitlessPokemonMetagameEndpoint(tourneyId, pokemonId));
 
 		// Parse HTML with Cheerio
 		const $ = cheerio.load(data);
 
 		var playerURLs = [];
+        var pokemonName = "";
+
+        $('div.name').each((_idx, el) => {
+            pokemonName = $(el).text();
+        });
 
 		$('tbody > tr > td > a').each((_idx, el) => {
 			const playerURL = el.attribs['href'];
 			playerURLs.push(playerURL)
 		});
-
         playerURLs = playerURLs.filter(url => url.includes('teamlist'));
-		return playerURLs;
+
+		return {
+            pokemonName: pokemonName,
+            teamLists: playerURLs
+        };
 	} catch (error) {
 		throw error;
 	}
 };
 
-const getItemsAndMoves = async (pokemonObj) => {
+const getPokemonStats = async (tourneyId, pokemonId) => {
     var movesMap = {};
     var itemMap = {};
     var teraMap = {};
@@ -114,10 +119,11 @@ const getItemsAndMoves = async (pokemonObj) => {
 
     const stats = {};
 
-    const teamLists = await getPlayerTeamlists(pokemonObj);
+    const response = await getPlayerTeamlists(tourneyId, pokemonId);
+    const pokemonName = response.pokemonName, teamLists = response.teamLists;
+
     const total = teamLists.length;
 
-    const pokemonName = pokemonObj.name;
     try {
         for (const teamList of teamLists) {
             const { data } = await axios.get(limitlessBaseUrl + teamList)
@@ -174,8 +180,10 @@ const getItemsAndMoves = async (pokemonObj) => {
         stats['abilityTotals'] = abilityMap;
         stats['abilityPercents'] = convertTotalsToPercent(abilityMap, total); 
 
-        console.log(pokemonName);
-        console.log(stats);
+        return {
+            pokemonName: pokemonName,
+            stats: stats
+        }
 
     } catch (error) {
         throw error;
@@ -183,5 +191,26 @@ const getItemsAndMoves = async (pokemonObj) => {
 
 }
 
-//getTournamentStats();
-getItemsAndMoves(pokemonTestObj);
+app.get('/api/v1/tournaments/:tourneyId/', async (req, res) => {
+    const tourneyId = req.params.tourneyId;
+
+    const tourneyStats = await getTournamentStats(tourneyId);
+    res.send(tourneyStats);
+});
+
+app.get('/api/v1/tournaments/:tourneyId/:pokemonId', async (req, res) => {
+    const tourneyId = req.params.tourneyId;
+    const pokemonId = req.params.pokemonId;
+
+    const pokemonStats = await getPokemonStats(tourneyId, pokemonId)
+    res.send(pokemonStats);
+});
+
+app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+})
+
+
+
+//getTournamentStats(testTourneyId).then(response => console.log(response));
+//getPokemonStats(testTourneyId, pokemonTestObj.id).then(response => console.log(response));
