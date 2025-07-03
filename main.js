@@ -1,25 +1,15 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-
+var cors = require('cors');
 const express = require('express');
 const app = express();
 const port = 3000;
 
 const limitlessBaseUrl = 'https://play.limitlesstcg.com';
-// const limitlessTourneyEndpoint = 'tournament';
-// const limitlessMetagameEndpoint = 'metagame';
+
 const getLimitlessMetagameEndpoint = (tourneyId) => `https://play.limitlesstcg.com/tournament/${tourneyId}/metagame`;
 const getLimitlessPokemonMetagameEndpoint = (tourneyId, pokemonId) => `${getLimitlessMetagameEndpoint(tourneyId)}/${pokemonId}`; 
 
-const pokemonTestObj = {
-    usageTotal: '18',
-    id: 'glimmora',
-    name: 'Glimmora',
-    usagePercent: '81.82%',
-    winPercent: '53.40%'
-};
-
-const testTourneyId = "6850825127d8bc24cf2556aa";
 const sortObject = (obj) => {
     const clone = structuredClone(obj);
     return Object.fromEntries(Object.entries(clone).sort((a,b) => b[1] - a[1]));
@@ -191,6 +181,14 @@ const getPokemonStats = async (tourneyId, pokemonId) => {
 
 }
 
+var corsOptions = {
+  origin: 'http://terrencejam.es',
+  optionsSuccessStatus: 200
+}
+
+app.use(cors(corsOptions));
+
+
 app.get('/api/v1/tournaments/:tourneyId/', async (req, res) => {
     const tourneyId = req.params.tourneyId;
 
@@ -207,10 +205,5 @@ app.get('/api/v1/tournaments/:tourneyId/:pokemonId', async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
+    console.log(`Limitless VGC API server listening ${port}`)
 })
-
-
-
-//getTournamentStats(testTourneyId).then(response => console.log(response));
-//getPokemonStats(testTourneyId, pokemonTestObj.id).then(response => console.log(response));
