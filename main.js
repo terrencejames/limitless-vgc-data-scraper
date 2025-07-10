@@ -182,7 +182,7 @@ const getPokemonStats = async (tourneyId, pokemonId) => {
 }
 
 var corsOptions = {
-  origin: 'http://terrencejam.es',
+  origin: 'https://terrencejam.es',
   optionsSuccessStatus: 200
 }
 
